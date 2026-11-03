@@ -1,0 +1,14 @@
+{
+  "name": "Visual QC Copilot",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r requirements-dev.txt -r requirements-rag.txt && [ -f .env ] || cp .env.example .env",
+  "forwardPorts": [8501, 8000],
+  "portsAttributes": {
+    "8501": { "label": "Dashboard", "onAutoForward": "openBrowser" },
+    "8000": { "label": "API", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": { "extensions": ["ms-python.python"] }
+  },
+  "hostRequirements": { "cpus": 2 }
+}

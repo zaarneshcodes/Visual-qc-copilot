@@ -1,0 +1,9 @@
+{
+  "model": "patchcore",
+  "category": "bottle",
+  "threshold_balanced": 0.40130093693733215,
+  "threshold_zero_false_alarm_cal": 0.30260187387466436,
+  "seed": 42,
+  "created": "2026-10-30 19:53",
+  "source": "values from results/runs/run_patchcore_bottle_20261030_195339.json; replace with the Drive file"
+}

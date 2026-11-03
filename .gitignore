@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Secrets
+.env
+
+# Data and weights (too big for git; weights go to the Hugging Face Hub)
+data/*
+!data/.gitkeep
+!data/README.md
+!data/knowledge_base/
+!data/eval_labels.csv
+datasets/
+models/*
+!models/.gitkeep
+*.onnx
+*.ckpt
+lightning_logs/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

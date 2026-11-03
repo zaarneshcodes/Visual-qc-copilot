@@ -1,0 +1,12 @@
+# Serving stack: API + dashboard + ONNX inference + Claude. No torch, no anomalib.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+python-dotenv>=1.0
+requests>=2.31
+pillow>=10.0
+numpy>=1.26
+onnxruntime>=1.20       # models are exported at opset 18
+anthropic>=0.40
+streamlit>=1.35
+huggingface_hub>=0.23

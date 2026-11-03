@@ -1,0 +1,17 @@
+[theme]
+base = "light"
+primaryColor = "#1F5F8B"          # inspection-station blue
+backgroundColor = "#F4F6F7"       # machined-steel light grey
+secondaryBackgroundColor = "#E2E7EA"
+textColor = "#1C252B"
+font = "sans serif"
+
+[server]
+maxUploadSize = 10
+# Uploads must work behind proxies (GitHub Codespaces, Hugging Face Spaces). This is a demo app
+# with no user accounts, so cross-site request protection is not needed.
+enableXsrfProtection = false
+enableCORS = false
+
+[browser]
+gatherUsageStats = false

@@ -1,0 +1,9 @@
+{
+  "model": "patchcore",
+  "category": "pcb1",
+  "threshold_balanced": 0.5,
+  "threshold_zero_false_alarm_cal": 0.7537204027175904,
+  "seed": 42,
+  "created": "2026-11-02 16:42",
+  "source": "values from results/runs/run_patchcore_pcb1_20261102_164210.json; replace with the Drive file"
+}

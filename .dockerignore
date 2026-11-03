@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+venv
+__pycache__
+.env
+data
+datasets
+results
+lightning_logs
+notebooks
+tests

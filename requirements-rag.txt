@@ -1,0 +1,5 @@
+# Semantic SOP retrieval (LangChain + Chroma). Uses Chroma's ONNX MiniLM embeddings, so no torch.
+# Without this file installed the app falls back to keyword retrieval.
+langchain-core>=0.3
+langchain-chroma>=0.1.4
+chromadb>=0.5
