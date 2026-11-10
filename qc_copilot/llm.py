@@ -7,8 +7,8 @@ LLM_PROVIDER:
   none    — no language model; rule-based fallbacks
   auto    — (default) first one with a key: claude, then gemini, else none
 
-Gemini and Ollama are called through their OpenAI-compatible chat endpoints with plain
-`requests`, so they add no dependencies.
+Gemini is called through its native generateContent endpoint and Ollama through its
+OpenAI-compatible endpoint, both with plain `requests`, so they add no dependencies.
 """
 from __future__ import annotations
 
@@ -22,7 +22,10 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
-GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# Gemini Flash models "think" before answering and that counts against the output limit,
+# so give them headroom or the JSON answer gets cut off.
+GEMINI_MIN_OUTPUT_TOKENS = 4096
 
 _anthropic_client = None
 
@@ -41,8 +44,10 @@ def ask_json(system: str, content: list[dict], max_tokens: int = 1200) -> dict:
     provider = settings.llm_provider
     if provider == "claude":
         text = _ask_claude(system, content, max_tokens)
-    elif provider in ("gemini", "ollama"):
-        text = _ask_openai_compatible(provider, system, content, max_tokens)
+    elif provider == "gemini":
+        text = _ask_gemini(system, content, max_tokens)
+    elif provider == "ollama":
+        text = _ask_ollama(system, content, max_tokens)
     else:
         raise RuntimeError("No language model configured (LLM_PROVIDER=none)")
     return parse_json(text)
@@ -83,20 +88,47 @@ def build_openai_payload(model: str, system: str, content: list[dict], max_token
     }
 
 
-def _ask_openai_compatible(provider: str, system: str, content: list[dict], max_tokens: int) -> str:
-    if provider == "gemini":
-        url, model = GEMINI_OPENAI_URL, settings.gemini_model
-        headers = {"Authorization": f"Bearer {settings.gemini_api_key}"}
-        timeout = 90
-    else:
-        url, model = settings.ollama_url.rstrip("/") + "/v1/chat/completions", settings.ollama_model
-        headers = {}
-        timeout = 300  # local CPU models are slow
-    resp = requests.post(url, json=build_openai_payload(model, system, content, max_tokens), headers=headers,
-                         timeout=timeout)
+def build_gemini_payload(system: str, content: list[dict], max_tokens: int) -> dict:
+    parts = [
+        {"inline_data": {"mime_type": "image/png", "data": c["b64_png"]}}
+        if c["type"] == "image"
+        else {"text": c["text"]}
+        for c in content
+    ]
+    return {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {
+            "maxOutputTokens": max(max_tokens, GEMINI_MIN_OUTPUT_TOKENS),
+            "responseMimeType": "application/json",
+        },
+    }
+
+
+def _ask_gemini(system: str, content: list[dict], max_tokens: int) -> str:
+    resp = requests.post(
+        GEMINI_URL.format(model=settings.gemini_model),
+        json=build_gemini_payload(system, content, max_tokens),
+        headers={"x-goog-api-key": settings.gemini_api_key},
+        timeout=120,
+    )
     if resp.status_code == 429:
-        raise RuntimeError(f"{provider} rate limit reached (free-tier quota); using fallback output")
-    resp.raise_for_status()
+        raise RuntimeError("gemini rate limit reached (free-tier quota); using fallback output")
+    if not resp.ok:  # show Google's own explanation, not just the status code
+        raise RuntimeError(f"gemini HTTP {resp.status_code}: {resp.text[:300]}")
+    candidates = resp.json().get("candidates") or []
+    if not candidates:
+        raise RuntimeError(f"gemini returned no answer: {resp.text[:300]}")
+    parts = candidates[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts if not p.get("thought"))
+
+
+def _ask_ollama(system: str, content: list[dict], max_tokens: int) -> str:
+    url = settings.ollama_url.rstrip("/") + "/v1/chat/completions"
+    payload = build_openai_payload(settings.ollama_model, system, content, max_tokens)
+    resp = requests.post(url, json=payload, timeout=300)  # local CPU models are slow
+    if not resp.ok:
+        raise RuntimeError(f"ollama HTTP {resp.status_code}: {resp.text[:300]}")
     return resp.json()["choices"][0]["message"]["content"] or ""
 
 

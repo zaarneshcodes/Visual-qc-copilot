@@ -27,15 +27,23 @@ def test_openai_payload_carries_images_as_data_urls():
     assert user[1] == {"type": "text", "text": "hi"}
 
 
+def test_gemini_payload_uses_native_format():
+    payload = llm.build_gemini_payload("sys", [llm.image_block("QUJD"), llm.text_block("hi")], 100)
+    parts = payload["contents"][0]["parts"]
+    assert payload["system_instruction"]["parts"][0]["text"] == "sys"
+    assert parts[0]["inline_data"] == {"mime_type": "image/png", "data": "QUJD"}
+    assert parts[1] == {"text": "hi"}
+    assert payload["generationConfig"]["maxOutputTokens"] >= llm.GEMINI_MIN_OUTPUT_TOKENS
+
+
 def test_gemini_call_parses_json_reply(monkeypatch):
     class Resp:
         status_code = 200
-
-        def raise_for_status(self):
-            pass
+        ok = True
+        text = ""
 
         def json(self):
-            return {"choices": [{"message": {"content": '```json\n{"verdict": "FAIL"}\n```'}}]}
+            return {"candidates": [{"content": {"parts": [{"text": '```json\n{"verdict": "FAIL"}\n```'}]}}]}
 
     sent = {}
 
@@ -46,4 +54,4 @@ def test_gemini_call_parses_json_reply(monkeypatch):
     monkeypatch.setattr(llm, "settings", _settings(monkeypatch, LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
     monkeypatch.setattr(llm.requests, "post", fake_post)
     assert llm.ask_json("sys", [llm.text_block("x")]) == {"verdict": "FAIL"}
-    assert sent["url"] == llm.GEMINI_OPENAI_URL and sent["headers"]["Authorization"] == "Bearer k"
+    assert sent["url"].endswith(":generateContent") and sent["headers"]["x-goog-api-key"] == "k"
