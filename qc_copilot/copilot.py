@@ -95,12 +95,34 @@ def write_report(product: str, detection: dict, description: dict, chunks: list[
                     f"SOP excerpts:\n{_format_context(chunks)}"
                 )
             ]
-            out = llm.ask_json(REPORT_SYSTEM, content, max_tokens=1200)
+            out = enforce_consistency(llm.ask_json(REPORT_SYSTEM, content, max_tokens=1200))
             out["generated_by"] = settings.llm_label
             return out
         except Exception as exc:
             log.error("Report generation failed: %s", exc)
     return _fallback_report(detection, chunks)
+
+
+# Which dispositions each verdict allows. Small models sometimes contradict themselves
+# (e.g. FAIL + accept); a QC system must never ship that, so the code checks it.
+ALLOWED_DISPOSITIONS = {
+    "PASS": {"accept"},
+    "FAIL": {"rework", "scrap", "escalate"},
+    "REVIEW": {"escalate"},
+}
+
+
+def enforce_consistency(report: dict) -> dict:
+    verdict = str(report.get("verdict", "")).upper()
+    disposition = str(report.get("disposition", "")).lower()
+    report["verdict"], report["disposition"] = verdict, disposition
+    if disposition not in ALLOWED_DISPOSITIONS.get(verdict, set()):
+        report["consistency_note"] = (
+            f"Model returned verdict {verdict or '?'} with disposition {disposition or '?'}, "
+            "which contradict each other; routed to human review."
+        )
+        report["verdict"], report["disposition"] = "REVIEW", "escalate"
+    return report
 
 
 def pass_report() -> dict:

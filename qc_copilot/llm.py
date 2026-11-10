@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 
 import requests
 
@@ -26,6 +27,9 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:ge
 # Gemini Flash models "think" before answering and that counts against the output limit,
 # so give them headroom or the JSON answer gets cut off.
 GEMINI_MIN_OUTPUT_TOKENS = 4096
+# Free-tier servers often answer 503 "high demand" or 500; these usually clear within seconds.
+RETRY_STATUSES = {500, 502, 503, 504}
+RETRY_WAITS_SECONDS = (2, 5, 10)
 
 _anthropic_client = None
 
@@ -106,12 +110,15 @@ def build_gemini_payload(system: str, content: list[dict], max_tokens: int) -> d
 
 
 def _ask_gemini(system: str, content: list[dict], max_tokens: int) -> str:
-    resp = requests.post(
-        GEMINI_URL.format(model=settings.gemini_model),
-        json=build_gemini_payload(system, content, max_tokens),
-        headers={"x-goog-api-key": settings.gemini_api_key},
-        timeout=120,
-    )
+    url = GEMINI_URL.format(model=settings.gemini_model)
+    payload = build_gemini_payload(system, content, max_tokens)
+    headers = {"x-goog-api-key": settings.gemini_api_key}
+    for attempt, wait in enumerate((*RETRY_WAITS_SECONDS, None), start=1):
+        resp = requests.post(url, json=payload, headers=headers, timeout=120)
+        if resp.status_code not in RETRY_STATUSES or wait is None:
+            break
+        log.warning("gemini busy (HTTP %s), retry %d in %ss", resp.status_code, attempt, wait)
+        time.sleep(wait)
     if resp.status_code == 429:
         raise RuntimeError("gemini rate limit reached (free-tier quota); using fallback output")
     if not resp.ok:  # show Google's own explanation, not just the status code
